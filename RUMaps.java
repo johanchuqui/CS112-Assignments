@@ -40,9 +40,9 @@ public class RUMaps {
         for (Block block: rutgers.getAdjacencyList()) {
             Block ptr = block;
             while (ptr != null) {
-                ptr.setLength(blockLength(block));
-                ptr.setTrafficFactor(blockTrafficFactor(block));
-                ptr.setTraffic(blockTraffic(block));
+                ptr.setLength(blockLength(ptr));
+                ptr.setTrafficFactor(blockTrafficFactor(ptr));
+                ptr.setTraffic(blockTraffic(ptr));
                 ptr = ptr.getNext();
             }
         }
@@ -75,9 +75,36 @@ public class RUMaps {
      * @return an ArrayList of blocks
      */
     public ArrayList<Block> initializeBlocks(int numStreets) {
-        // WRITE YOUR CODE HERE
-        
-        return null; // Replace this line, it is provided so the code compiles
+        ArrayList<Block> blocks = new ArrayList<>();
+
+        for(int i = 0; i < numStreets; i++) {
+            String streetName = StdIn.readLine();
+            int numBlocks = StdIn.readInt();
+            StdIn.readLine();
+
+            for(int j = 0; j < numBlocks; j++) {
+                int blockNum = StdIn.readInt();
+                int numPts = StdIn.readInt();
+                double roadSize = StdIn.readDouble();
+                StdIn.readLine();
+                Block block = new Block(roadSize, streetName, blockNum);
+
+                for(int k = 0; k < numPts; k++) {
+                    int x = StdIn.readInt();
+                    int y = StdIn.readInt();
+                    Coordinate coordinate = new Coordinate(x, y);
+
+                    if(k == 0) {
+                        block.startPoint(coordinate);
+                    } else {
+                        block.nextPoint(coordinate);
+                    }
+                    StdIn.readLine();
+                }
+                blocks.add(block);
+            }
+        }
+        return blocks;
     }
 
     /**
@@ -91,8 +118,45 @@ public class RUMaps {
      * Note that .addEdge(__) ONLY adds edges in one direction (a -> b). 
      */
     public void initializeIntersections(ArrayList<Block> blocks) {
-        // WRITE YOUR CODE HERE
-     }
+        for(Block block: blocks) {
+            Coordinate start = block.getCoordinatePoints().get(0);
+            Coordinate end = block.getCoordinatePoints().get(block.getCoordinatePoints().size() -1);
+            int startIndex = rutgers.findIntersection(start);
+
+            if(startIndex == -1) {
+                Intersection startIntersection = new Intersection(start);
+                rutgers.addIntersection(startIntersection);
+                block.setFirstEndpoint(startIntersection);
+            } else {
+                Intersection startIntersction = rutgers.getIntersections()[startIndex];
+                block.setFirstEndpoint(startIntersction);
+            }
+            int endIndex = rutgers.findIntersection(end);
+
+            if(endIndex == -1) {
+                Intersection endIntersection = new Intersection(end);
+                rutgers.addIntersection(endIntersection);
+                block.setLastEndpoint(endIntersection);
+            } else {
+                Intersection endIntersection = rutgers.getIntersections()[endIndex];
+                block.setLastEndpoint(endIntersection);
+            }
+
+            int updateStart = rutgers.findIntersection(start);
+            int updateEnd = rutgers.findIntersection(end);
+
+            Block forward = block.copy();
+            Block backward = block.copy();
+
+            forward.setFirstEndpoint(block.getFirstEndpoint());
+            forward.setLastEndpoint(block.getLastEndpoint());
+            backward.setFirstEndpoint(block.getLastEndpoint());
+            backward.setLastEndpoint(block.getFirstEndpoint());
+
+            rutgers.addEdge(updateStart, forward);
+            rutgers.addEdge(updateEnd, backward);
+        }
+    }
 
     /**
      * Calculates the length of a block by summing the distances between consecutive points for all points in the block.
@@ -101,9 +165,15 @@ public class RUMaps {
      * @return The total length of the block
      */
     public double blockLength(Block block) {
-        // WRITE YOUR CODE HERE
-        
-        return 0.0; // Replace this line, it is provided so the code compiles
+        double totalLength = 0.0;
+        ArrayList<Coordinate> points = block.getCoordinatePoints();
+
+        for(int i = 0; i < points.size() -1; i++) {
+            Coordinate a = points.get(i);
+            Coordinate b = points.get(i + 1);
+            totalLength += coordinateDistance(a, b);
+        }
+        return totalLength;
     }
 
     /**
@@ -113,11 +183,27 @@ public class RUMaps {
      * Implement this method recursively, using a helper method.
      */
     public ArrayList<Intersection> reachableIntersections(Intersection source) {
-        // WRITE YOUR CODE HERE
-
-        return null; // Replace this line, it is provided so the code compiles
+        ArrayList<Intersection> result = new ArrayList<>();
+        Set<Intersection> visited = new HashSet<>();
+        dfsHelper(source, visited, result);
+        return result;
     }
-     
+    private void dfsHelper(Intersection curr, Set<Intersection> visited, ArrayList<Intersection> result) {
+        if(curr == null || visited.contains(curr)) {
+            return;
+        }
+        visited.add(curr);
+        result.add(curr);
+
+        int currIndex = rutgers.findIntersection(curr.getCoordinate());
+        Block block = rutgers.getAdjacencyList()[currIndex];
+
+        while(block != null) {  
+            Intersection neighbor = block.getLastEndpoint();
+            dfsHelper(neighbor, visited, result);
+            block = block.getNext();
+        }
+    }
 
     /**
      * Finds and returns the path with the least number of intersections (nodes) from the start to the end intersection.
@@ -130,9 +216,47 @@ public class RUMaps {
      * @return The path with the least number of turns, or an empty ArrayList if no path exists
      */
     public ArrayList<Intersection> minimizeIntersections(Intersection start, Intersection end) {
-        // WRITE YOUR CODE HERE
+        Map<Intersection, Intersection> edgeTo = new HashMap<>();
+        Set<Intersection> visited = new HashSet<>();
+        Queue<Intersection> queue = new Queue<>();
 
-        return null; // Replace this line, it is provided so the code compiles
+        visited.add(start);
+        queue.enqueue(start);
+
+        while(!queue.isEmpty()) {
+            Intersection curr = queue.dequeue();
+
+            if(curr.equals(end)){
+                break;
+            }
+            int currIndex = rutgers.findIntersection(curr.getCoordinate());
+            Block block = rutgers.getAdjacencyList()[currIndex];
+
+            while(block != null) {
+                Intersection neighbor = block.getLastEndpoint();
+
+                if(!visited.contains(neighbor)){
+                    visited.add(neighbor);
+                    edgeTo.put(neighbor, curr);
+                    queue.enqueue(neighbor);
+                }
+                block = block.getNext();
+
+            }
+        }
+        ArrayList<Intersection> path = new ArrayList<>();
+        Intersection v = end;
+
+        while(v != null && edgeTo.containsKey(v)){
+            path.add(v);
+            v = edgeTo.get(v);
+        }
+        if(v != null && v.equals(start)){
+            path.add(start);
+            Collections.reverse(path);
+            return path;
+        }
+        return new ArrayList<>();
     }
 
     /**
@@ -148,9 +272,65 @@ public class RUMaps {
      * @return The path with the least traffic, or an empty ArrayList if no path exists
      */
     public ArrayList<Intersection> fastestPath(Intersection start, Intersection end) {
-        // WRITE YOUR CODE HERE
+        Map<Intersection, Double> cost = new HashMap<>();
+        Map<Intersection, Intersection> pred = new HashMap<>();
+        Set<Intersection> done = new HashSet<>();
+        ArrayList<Intersection> fringe = new ArrayList<>();
+
+        cost.put(start, 0.0);
+        fringe.add(start);
+
+        while(!fringe.isEmpty()){
+            Intersection curr = fringe.get(0);
+            for(int i = 0; i < fringe.size(); i++) {
+                Intersection candidate = fringe.get(i);
+
+                if(cost.get(candidate) < cost.get(curr)){
+                    curr = candidate;
+                }
+            }
+            fringe.remove(curr);
+            done.add(curr);
+
+            if(curr.equals(end)){
+                break;
+            }
+            int currIndex = rutgers.findIntersection(curr.getCoordinate());
+            Block block = rutgers.getAdjacencyList()[currIndex];
+
+            while(block != null) {
+                Intersection neighbor = block.getLastEndpoint();
+                double edgeWeight = block.getTraffic();
+
+                if(done.contains(neighbor)){
+                    block = block.getNext();
+                    continue;
+                }
+                double newCost = cost.get(curr) + edgeWeight;
+
+                if(!cost.containsKey(neighbor) || newCost < cost.get(neighbor)){
+                    cost.put(neighbor, newCost);
+                    pred.put(neighbor, curr);
+                    if(!fringe.contains(neighbor)){
+                        fringe.add(neighbor);
+                    }
+                }
+                block = block.getNext();
+            }
+        }
+        ArrayList<Intersection> path = new ArrayList<>();
+        Intersection v = end;
         
-        return null; // Replace this line, it is provided so the code compiles
+        while(v != null && pred.containsKey(v)){
+            path.add(v);
+            v = pred.get(v);
+        }
+        if(v != null && v.equals(start)){
+            path.add(start);
+            Collections.reverse(path);
+            return path;
+        }
+        return new ArrayList<>();
     }
 
     /**
@@ -164,9 +344,29 @@ public class RUMaps {
      * @return A double array containing the total length, average experienced traffic factor, and total traffic of the path (in that order)
      */
     public double[] pathInformation(ArrayList<Intersection> path) {
-        // WRITE YOUR CODE HERE
-        
-        return new double[] {0, 0, 0}; // Replace this line, it is provided so the code compiles
+        double totalLength = 0.0;
+        double totalTraffic = 0.0;
+
+        if(path == null || path.size() < 2) {
+            return new double[]{0,0,0};
+        }
+        for(int i = 0; i < path.size() -1; i++){
+            Intersection curr = path.get(i);
+            Intersection next = path.get(i + 1);
+            int currIndex = rutgers.findIntersection(curr.getCoordinate());
+            Block block = rutgers.getAdjacencyList()[currIndex];
+
+            while(block != null) {
+                if(block.getLastEndpoint().equals(next)){
+                    totalLength += block.getLength();
+                    totalTraffic += block.getTraffic();
+                    break;
+                }
+                block = block.getNext();
+            }
+        }
+        double avgTraffic = totalLength == 0?0: totalTraffic / totalLength;
+        return new double[]{totalLength, avgTraffic, totalTraffic};
     }
 
     /**
@@ -225,18 +425,4 @@ public class RUMaps {
     public Network getRutgers() {
         return rutgers;
     }
-
-
-
-
-    
-    
-
-
-
-
-
-
-
-
 }
